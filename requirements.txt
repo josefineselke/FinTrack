@@ -1,0 +1,4 @@
+pandas>=2.0.0
+pdfminer.six>=20221105
+pyyaml>=6.0.1
+glob2>=0.7 

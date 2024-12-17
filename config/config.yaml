@@ -1,0 +1,63 @@
+# Paths
+paths:
+  input_dir: ./account_statements
+  output_dir: ./output
+  
+# Files
+files:
+  filetype: pdf
+  output_file: all_transactions.csv
+
+# Categories and Keywords
+categories:
+  savings:
+    name: Savings
+    keywords:
+      - sparen
+  rent:
+    name: Rent
+    keywords:
+      - miete
+  health:
+    name: Health
+    keywords: 
+      - fitx
+      - fitness
+      - fitnessclub
+      - fitnessstudio
+      - apotheke
+      - arzt
+      - krankenversicherung
+      - krankenkasse
+  insurance:
+    name: Insurance
+    keywords:
+      - versicherung
+  taxes:
+    name: Taxes
+    keywords:
+      - steuer
+  transport:
+    name: Transport
+    keywords: 
+      - logpay
+      - bahn
+      - deutsche bahn
+      - db
+      - dbag
+  salary:
+    name: Salary
+    keywords: 
+      - heringer
+      - gehalt
+  telecom:
+    name: Telecommunications
+    keywords:
+      - klarmobil
+      - vodafone
+      - telekom
+      - t-mobile
+      - o2
+  personal:
+    name: Personal
+    keywords: []  # Default category if no other matches
