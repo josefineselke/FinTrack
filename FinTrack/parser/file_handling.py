@@ -2,10 +2,11 @@ from abc import ABC, abstractmethod
 from pdfminer.high_level import extract_pages
 from pdfminer.layout import LTTextBox
 from typing import List, Dict
+import csv
 import pandas as pd
-import yaml
-import re
 import os
+import re
+import yaml
 
 class AccountStatementParser(ABC):
     def __init__(self, filepath: str, categories: dict = None):
@@ -297,7 +298,134 @@ class CSVParser(AccountStatementParser):
     def __init__(self, filepath: str, categories: dict = None):
         super().__init__(filepath, categories)
 
+    def validate_structure(self, lines: list) -> bool:
+        if len(lines) < 7:
+            raise ValueError("CSV-Datei hat zu wenig Zeilen")
+        
+        if not lines[2][0].startswith("Letzter Kontostand"):
+            raise ValueError("Dritte Zeile enthält nicht den letzten Kontostand")
+        
+        if not lines[-1][0] == "Kontostand":
+            raise ValueError("Letzte Zeile enthält nicht den aktuellen Kontostand")
+        
+        return True
+
+    def validate_columns(self, headers: list) -> bool:
+        required_columns = [
+            'Buchungstag',
+            'Soll',
+            'Haben',
+            'Währung'
+        ]
+        
+        missing = [col for col in required_columns if col not in headers]
+        if missing:
+            raise ValueError(f"Fehlende Pflicht-Spalten: {missing}")
+        
+        return True
+
     def extract_data(self) -> pd.DataFrame:
-        # Implementation for CSV files
-        pass
+        encodings = ['latin1', 'utf-8', 'iso-8859-1', 'cp1252']
+        
+        for encoding in encodings:
+            try:
+                valid_rows = []
+                last_balance = None
+                current_balance = None
+                
+                with open(self.filepath, 'r', encoding=encoding) as file:
+                    all_lines = list(csv.reader(file, delimiter=';'))
+                    
+                    # Validiere Grundstruktur
+                    self.validate_structure(all_lines)
+                    
+                    # Letzter Kontostand aus der dritten Zeile
+                    if 'Letzter Kontostand' in all_lines[2][0]:
+                        last_balance = float(all_lines[2][4].replace('.', '').replace(',', '.'))
+                    
+                    # Aktueller Kontostand aus der letzten Zeile
+                    if all_lines[-1][0] == 'Kontostand':
+                        current_balance = float(all_lines[-1][4].replace('.', '').replace(',', '.'))
+                    
+                    # Headers sind in Zeile 4
+                    headers = all_lines[4]
+                    
+                    # Validiere Spalten
+                    self.validate_columns(headers)
+                    
+                    # Transaktionen verarbeiten (Zeilen 5 bis -2)
+                    for row in all_lines[5:-1]:  # Exclude headers and last balance row
+                        if row and 'Kontostand' not in row[0]:
+                            valid_rows.append(row)
+                            
+                print(f'Erfolgreich geöffnet mit {encoding}')
+                print(f'Letzter Kontostand: {last_balance}')
+                print(f'Aktueller Kontostand: {current_balance}')
+                
+                # Konvertiere zu DataFrame
+                df = pd.DataFrame(valid_rows, columns=headers)
+                
+                # Transformiere Daten ins standardisierte Format
+                df['date'] = pd.to_datetime(df['Buchungstag'], format='%d.%m.%Y')
+                df['year'] = df['date'].dt.year
+                df['month'] = df['date'].dt.month
+                df['quarter'] = df['date'].dt.quarter
+                
+                haben = df['Haben'].fillna(0).str.replace('.', '').str.replace(',', '.')
+                soll = df['Soll'].fillna(0).str.replace('.', '').str.replace(',', '.').str.replace('-', '')
+                
+                df['amount'] = pd.to_numeric(haben) - pd.to_numeric(soll)
+                df['credit'] = df['amount'].apply(lambda x: str(abs(x)) if x > 0 else None)
+                df['debit'] = df['amount'].apply(lambda x: str(abs(x)) if x < 0 else None)
+                
+                # Verwendungszweck kombinieren für Kategorisierung
+                df['purpose'] = df.apply(
+                    lambda row: self.categorize_transaction(
+                        f"{row['Umsatzart']} {row['Begünstigter / Auftraggeber']} {row['Verwendungszweck']}"
+                    ),
+                    axis=1
+                )
+                
+                # Kontostand berechnen
+                df = df.sort_values('date')
+                df['balance'] = current_balance
+                for i in range(len(df)-1, 0, -1):
+                    df.iloc[i-1, df.columns.get_loc('balance')] = \
+                        round(df.iloc[i]['balance'] - df.iloc[i]['amount'], 2)
+                
+                # Währung hinzufügen
+                df['currency'] = 'EUR'
+                
+                # Finales DataFrame mit standardisierten Spalten
+                result_df = df[[
+                    'purpose',
+                    'debit',
+                    'credit',
+                    'currency',
+                    'date',
+                    'year',
+                    'month',
+                    'quarter',
+                    'amount',
+                    'balance'
+                ]]
+                
+                return result_df
+                
+            except UnicodeDecodeError:
+                continue
+            except ValueError as e:
+                print(f"Validierungsfehler: {str(e)}")
+                raise
+                
+        return df
+
+    def categorize_transaction(self, text: str) -> str:
+        text_lower = text.lower()
+        
+        for category in self.categories.values():
+            if any(keyword in text_lower for keyword in category['keywords']):
+                return category['name']
+        
+        return 'Personal'
 

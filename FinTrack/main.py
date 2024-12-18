@@ -22,7 +22,6 @@ def main():
         input_pattern = f"*.{filetype}"
         file_pattern = os.path.join(config['paths']['input_dir'], input_pattern)
         input_files = glob.glob(file_pattern)
-        
         file_handler = FileHandler()
         
         # Process each file based on filetype

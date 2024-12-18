@@ -1,11 +1,11 @@
 # Paths
 paths:
-  input_dir: ./account_statements
-  output_dir: ./output
+  input_dir: FinTrack
+  output_dir: output
   
 # Files
 files:
-  filetype: pdf
+  filetype: csv
   output_file: all_transactions.csv
 
 # Categories and Keywords
